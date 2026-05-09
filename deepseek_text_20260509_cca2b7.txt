@@ -1,0 +1,8 @@
+gemini-watermark-remover/
+├── index.html
+├── js/
+│   ├── alphaMap.js
+│   ├── blendModes.js
+│   ├── engine.js
+│   └── app.js
+└── README.md   (opcional)
