@@ -20,7 +20,7 @@ export async function processImage(file) {
   const refSize = minDim <= 1024 ? 48 : 96;
   const margin = refSize === 48 ? 32 : 64;
 
-  // 3. Obtener el mapa alfa nativo (ImageData)
+  // 3. Obtener el mapa alfa nativo (ImageData, ya cacheado)
   const alphaMapNative = await getAlphaMap(refSize);
 
   // 4. Crear canvas de trabajo y dibujar la imagen original
@@ -37,8 +37,7 @@ export async function processImage(file) {
   const wmCtx = wmCanvas.getContext('2d');
   wmCtx.clearRect(0, 0, width, height);
 
-  // 6. Posicionar la marca en la esquina inferior derecha (sin escalar)
-  // Creamos un canvas temporal con el ImageData del mapa alfa
+  // 6. Posicionar la marca en la esquina inferior derecha SIN ESCALAR
   const tempCanvas = document.createElement('canvas');
   tempCanvas.width = refSize;
   tempCanvas.height = refSize;
@@ -49,16 +48,21 @@ export async function processImage(file) {
   const y = height - refSize - margin;
   wmCtx.drawImage(tempCanvas, x, y);
 
-  // 7. Obtener ImageData de ambas capas
+  // 7. Obtener los datos de píxeles de ambas capas
   const srcImageData = ctx.getImageData(0, 0, width, height);
   const watermarkImageData = wmCtx.getImageData(0, 0, width, height);
 
-  // 8. Aplicar algoritmo (opacidad base 1.0, el mapa alfa ya contiene transparencia)
+  // 8. Aplicar el algoritmo de reverse alpha blending
   removeWatermark(srcImageData, watermarkImageData, 1.0);
 
   // 9. Volcar resultado y exportar como blob PNG
   ctx.putImageData(srcImageData, 0, 0);
   return new Promise(resolve => {
-    canvas.toBlob(blob => resolve(blob), 'image/png');
+    canvas.toBlob(blob => {
+      if (!blob) {
+        throw new Error('No se pudo generar la imagen de salida');
+      }
+      resolve(blob);
+    }, 'image/png');
   });
 }
