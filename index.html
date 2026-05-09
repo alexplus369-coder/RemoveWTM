@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="es" class="bg-neutral-950">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RemoveWTM</title>
+  <meta name="description" content="Elimina marcas de agua de imágenes generadas por Google Gemini. Procesamiento 100% local en el navegador." />
+
+  <!-- Tailwind CSS (CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            neutral: {
+              925: '#1a1a1a',
+              950: '#0f0f0f',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <!-- Iconify -->
+  <script src="https://code.iconify.design/3/3.1.1/iconify.min.js"></script>
+  <!-- JSZip -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes fadein { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+    .spin { animation: spin .9s linear infinite; }
+    .fadein { animation: fadein .3s ease forwards; }
+    .pulse-dot { animation: pulse-dot 1.5s ease-in-out infinite; }
+
+    /* Scrollbar elegante */
+    .card-grid::-webkit-scrollbar { width: 6px; }
+    .card-grid::-webkit-scrollbar-track { background: transparent; }
+    .card-grid::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+
+    /* Zona de arrastre moderna */
+    .drop-zone {
+      transition: all 0.25s ease;
+      background: linear-gradient(145deg, #1e1e1e 0%, #181818 100%);
+      border: 2px dashed #333;
+    }
+    .drop-zone:hover, .drop-zone.dz-hover {
+      border-color: #34d399;
+      background: linear-gradient(145deg, #1f2937 0%, #111827 100%);
+      box-shadow: 0 0 25px -5px rgba(52, 211, 153, 0.25);
+    }
+
+    /* Slider de comparación */
+    .comparison-slider {
+      position: relative;
+      user-select: none;
+      overflow: hidden;
+      background: #0a0a0a;
+    }
+    .comparison-slider .after-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 50%;
+      height: 100%;
+      overflow: hidden;
+      border-right: 3px solid white;
+    }
+    .comparison-slider .after-layer img {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .comparison-slider .divider {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 4px;
+      background: white;
+      box-shadow: 0 0 15px rgba(0,0,0,0.7);
+      cursor: ew-resize;
+      z-index: 10;
+      left: 50%;
+    }
+    .comparison-slider .handle {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 40px;
+      height: 40px;
+      background: white;
+      border-radius: 50%;
+      box-shadow: 0 0 20px rgba(0,0,0,0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: ew-resize;
+      z-index: 11;
+    }
+    .comparison-slider .handle iconify-icon {
+      font-size: 20px;
+      color: #1f2937;
+    }
+  </style>
+</head>
+<body class="bg-neutral-950 text-gray-100 font-sans antialiased">
+
+  <main class="max-w-6xl mx-auto px-4 py-8 sm:py-12">
+    <!-- Encabezado + estado -->
+    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-10">
+      <div>
+        <h1 class="text-3xl sm:text-4xl font-bold tracking-tight bg-gradient-to-r from-emerald-400 to-emerald-300 bg-clip-text text-transparent">
+          Remover Gemini WTM - By Alexlink7
+        </h1>
+        <p class="text-sm text-gray-500 mt-2 max-w-lg">Eliminación de marcas de agua Gemini· 100% local · Sin servidores</p>
+      </div>
+      <div id="statusBadge" class="flex items-center gap-2.5 text-sm font-medium text-gray-300 bg-neutral-900 border border-neutral-800 rounded-full pl-3.5 pr-5 py-2 shadow-lg">
+        <span id="statusDot" class="w-2 h-2 rounded-full bg-yellow-500 pulse-dot"></span>
+        <span id="statusText">Cargando mapas...</span>
+      </div>
+    </div>
+
+    <!-- Drop‑zone -->
+    <div id="dropZone" class="drop-zone rounded-2xl p-8 sm:p-10 text-center cursor-pointer mb-10" onclick="document.getElementById('fileInput').click()">
+      <iconify-icon icon="lucide:image-up" class="text-5xl text-gray-700 mb-4"></iconify-icon>
+      <p class="text-xl font-medium text-gray-300">Arrastra tus imágenes aquí</p>
+      <p class="text-sm text-gray-600 mt-2">o haz clic para seleccionar archivos</p>
+      <p class="text-xs text-gray-700 mt-4">JPG, PNG, WebP, AVIF · Procesamiento local · Sin límite de tamaño</p>
+      <input type="file" id="fileInput" accept="image/*" multiple class="hidden" />
+    </div>
+
+    <!-- Resultados -->
+    <div id="resultsSection" class="hidden">
+      <div class="flex flex-wrap items-center justify-between gap-4 mb-5">
+        <div class="flex items-center gap-3">
+          <span id="resultsStatus" class="text-sm font-medium text-gray-400"></span>
+          <div class="h-1.5 w-36 bg-neutral-800 rounded-full overflow-hidden">
+            <div id="progressBar" class="h-full bg-emerald-400 transition-all duration-300" style="width:0%"></div>
+          </div>
+        </div>
+        <div class="flex gap-2">
+          <button id="clearBtn" class="hidden items-center gap-1.5 text-sm px-4 py-2 bg-neutral-800 border border-neutral-700 rounded-xl hover:bg-neutral-700 text-gray-300 transition shadow-md" onclick="clearAll()">
+            <iconify-icon icon="lucide:trash-2" class="text-sm"></iconify-icon> Limpiar
+          </button>
+          <button id="zipBtn" class="hidden items-center gap-1.5 text-sm px-4 py-2 bg-neutral-800 border border-neutral-700 rounded-xl hover:bg-neutral-700 text-gray-300 transition shadow-md" onclick="downloadZip()">
+            <iconify-icon icon="lucide:folder-archive" class="text-sm"></iconify-icon> Descargar ZIP
+          </button>
+        </div>
+      </div>
+
+      <!-- Rejilla de tarjetas -->
+      <div id="cardGrid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5 card-grid"></div>
+    </div>
+  </main>
+
+  <!-- Modal de comparación -->
+  <div id="compareModal" class="fixed inset-0 z-50 bg-black/90 backdrop-blur-md hidden flex items-center justify-center p-4" onclick="closeModal(event)">
+    <div class="relative bg-neutral-900 rounded-2xl shadow-2xl border border-neutral-800 max-w-5xl w-full max-h-[85vh] overflow-hidden" onclick="event.stopPropagation()">
+      <div class="flex items-center justify-between px-5 py-3 bg-neutral-800/50 border-b border-neutral-800">
+        <span class="text-sm font-medium text-gray-400">Comparación Antes / Después</span>
+        <button onclick="closeModal()" class="text-gray-500 hover:text-gray-200 transition">
+          <iconify-icon icon="lucide:x" class="text-xl"></iconify-icon>
+        </button>
+      </div>
+      <div class="p-1 sm:p-3">
+        <div id="compareContainer" class="comparison-slider w-full rounded-xl overflow-hidden" style="height: 65vh; max-height: 550px;">
+          <img id="compareBefore" src="" alt="Original" class="w-full h-full object-contain absolute top-0 left-0" />
+          <div class="after-layer" id="afterLayer">
+            <img id="compareAfter" src="" alt="Procesada" />
+          </div>
+          <div id="divider" class="divider" style="left: 50%;">
+            <div class="handle">
+              <iconify-icon icon="lucide:arrow-left-right"></iconify-icon>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
