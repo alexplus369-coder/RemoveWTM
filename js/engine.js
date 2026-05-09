@@ -20,7 +20,7 @@ export async function processImage(file) {
   const refSize = minDim <= 1024 ? 48 : 96;
   const margin = refSize === 48 ? 32 : 64;
 
-  // 3. Obtener el mapa alfa nativo (caché automático)
+  // 3. Obtener el mapa alfa nativo (ImageData)
   const alphaMapNative = await getAlphaMap(refSize);
 
   // 4. Crear canvas de trabajo y dibujar la imagen original
@@ -38,18 +38,15 @@ export async function processImage(file) {
   wmCtx.clearRect(0, 0, width, height);
 
   // 6. Posicionar la marca en la esquina inferior derecha (sin escalar)
-  const x = width - refSize - margin;
-  const y = height - refSize - margin;
-  const alphaBitmap = await createImageBitmap(
-    await (await fetch(alphaMapNative)).blob()  // pequeña optimización: reusamos el ImageData ya cargado
-  );
-  // En realidad, getAlphaMap ya devuelve ImageData, mejor convertirlo a ImageBitmap para drawImage
-  // Pero podemos dibujar directamente desde un canvas auxiliar
+  // Creamos un canvas temporal con el ImageData del mapa alfa
   const tempCanvas = document.createElement('canvas');
   tempCanvas.width = refSize;
   tempCanvas.height = refSize;
   const tempCtx = tempCanvas.getContext('2d');
   tempCtx.putImageData(alphaMapNative, 0, 0);
+
+  const x = width - refSize - margin;
+  const y = height - refSize - margin;
   wmCtx.drawImage(tempCanvas, x, y);
 
   // 7. Obtener ImageData de ambas capas
